@@ -3,3 +3,9 @@ conda_env/
 
 # Backup/temporal files
 *.bkp
+test.py
+*.pyc
+
+# Data
+data/dataset
+data/amazon_index

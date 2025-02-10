@@ -19,20 +19,29 @@
         <mxCell id="mTqiRhdewCi59NjFFLII-4" value="" style="endArrow=none;dashed=1;html=1;dashPattern=1 3;strokeWidth=2;rounded=0;" edge="1" parent="1">
           <mxGeometry width="50" height="50" relative="1" as="geometry">
             <mxPoint x="360" y="360" as="sourcePoint" />
-            <mxPoint x="480" y="360" as="targetPoint" />
+            <mxPoint x="640" y="360" as="targetPoint" />
           </mxGeometry>
         </mxCell>
         <mxCell id="mTqiRhdewCi59NjFFLII-5" value="" style="labelPosition=right;align=left;strokeWidth=1;shape=mxgraph.mockup.markup.curlyBrace;html=1;shadow=0;dashed=0;strokeColor=#000000;direction=north;rotation=-180;fillColor=#000000;" vertex="1" parent="1">
-          <mxGeometry x="560" y="280" width="10" height="70" as="geometry" />
+          <mxGeometry x="660" y="280" width="10" height="70" as="geometry" />
         </mxCell>
         <mxCell id="mTqiRhdewCi59NjFFLII-6" value="" style="labelPosition=right;align=left;strokeWidth=1;shape=mxgraph.mockup.markup.curlyBrace;html=1;shadow=0;dashed=0;strokeColor=#000000;direction=north;rotation=-180;fillColor=#000000;" vertex="1" parent="1">
-          <mxGeometry x="560" y="370" width="10" height="70" as="geometry" />
+          <mxGeometry x="660" y="370" width="10" height="70" as="geometry" />
         </mxCell>
         <mxCell id="mTqiRhdewCi59NjFFLII-7" value="Server" style="text;html=1;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;" vertex="1" parent="1">
-          <mxGeometry x="600" y="300" width="60" height="30" as="geometry" />
+          <mxGeometry x="700" y="300" width="60" height="30" as="geometry" />
         </mxCell>
         <mxCell id="mTqiRhdewCi59NjFFLII-8" value="Client" style="text;html=1;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;" vertex="1" parent="1">
-          <mxGeometry x="600" y="390" width="60" height="30" as="geometry" />
+          <mxGeometry x="700" y="390" width="60" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="mTqiRhdewCi59NjFFLII-9" value="LangChain" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="510" y="400" width="120" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="mTqiRhdewCi59NjFFLII-10" value="" style="endArrow=classic;startArrow=classic;html=1;rounded=0;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" edge="1" parent="1" source="mTqiRhdewCi59NjFFLII-2" target="mTqiRhdewCi59NjFFLII-9">
+          <mxGeometry width="50" height="50" relative="1" as="geometry">
+            <mxPoint x="440" y="330" as="sourcePoint" />
+            <mxPoint x="490" y="280" as="targetPoint" />
+          </mxGeometry>
         </mxCell>
       </root>
     </mxGraphModel>
