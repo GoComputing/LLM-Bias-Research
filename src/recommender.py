@@ -1,4 +1,5 @@
 from langchain_core.prompts import ChatPromptTemplate
+from tools import extract_all_json
 
 def build_prompt_template(titles, descriptions, query, attack_pos=None, ollama_prompt=False):
 
@@ -58,7 +59,24 @@ class RecommendationSystem:
         # Generate response
         response = chain.invoke({'query' : query})
 
-        return matches, response
+        # Parse response
+        schema = {
+            "type": "object",
+            "properties": {
+                "article_number": {"type": "string"},
+                "article_title": {"type": "string"},
+                "recommendation": {"type": "string"}
+            },
+            "required": ["article_number", "article_title", "recommendation"]
+        }
+
+        parsed_response = extract_all_json(response, schema)
+        if len(parsed_response) == 0 or len(parsed_response) > 1:
+            parsed_response = None
+        else:
+            parsed_response = parsed_response[0]
+
+        return matches, response, parsed_response
 
 
     def update_product_description(self, product_id, new_description):

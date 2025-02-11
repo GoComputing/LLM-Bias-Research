@@ -12,18 +12,19 @@ def main(args):
     # Load search engine
     print("Loading index...")
     search_engine = AmazonSearchEngine()
-    search_engine.load_search_engine(amazon_index_path, top_k=5)
+    search_engine.load_search_engine(amazon_index_path)
 
     # Initialize recommender system
     recommender_llm = OllamaLLM(model=llm_name)
-    recommendation_system = RecommendationSystem(search_engine, recommender_llm)
+    recommendation_system = RecommendationSystem(search_engine, recommender_llm, top_k=5)
 
     # Generate response
     print("Generating response...")
-    matches, response = recommendation_system.query(query)
+    matches, response, parsed_response = recommendation_system.query(query)
 
     print(matches)
     print(response)
+    print(parsed_response)
 
 
 if __name__ == '__main__':
