@@ -9,3 +9,6 @@ test.py
 # Data
 data/dataset
 data/amazon_index
+
+# Results
+results/

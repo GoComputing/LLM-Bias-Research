@@ -17,7 +17,7 @@ def build_prompt_template(titles, descriptions, query, attack_pos=None, ollama_p
     if attack_pos is None:
         query_line = query_line.format(query=query)
     prompt += query_line
-    prompt += '\n\nPlease provide your answer using a JSON format with the fields "article_number", "article_title" and "recommendation"'
+    prompt += '\n\nPlease provide your answer using a JSON format with the fields "article_number" (int), "article_title" (str) and "recommendation" (str)'
 
     if ollama_prompt:
         prompt = ChatPromptTemplate.from_template(prompt)
@@ -84,7 +84,7 @@ class RecommendationSystem:
         schema = {
             "type": "object",
             "properties": {
-                "article_number": {"type": "string"},
+                "article_number": {"type": ["string", "integer"]},
                 "article_title": {"type": "string"},
                 "recommendation": {"type": "string"}
             },
