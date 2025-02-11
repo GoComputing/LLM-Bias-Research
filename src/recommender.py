@@ -35,6 +35,15 @@ class RecommendationSystem:
         self.top_k = top_k
 
     def get_matches(self, query):
+        """
+        Uses the search engine to find the closest articles
+
+        Parameters:
+          query (str): User query used to find closest articles
+
+        Returns:
+          matches (pd.DataFrame): DataFrame with the closest articles. A minimun of two columns are present (TITLE, DESCRIPTION)
+        """
 
         if query in self.queries_cache:
             matches = self.queries_cache[query]
@@ -45,7 +54,19 @@ class RecommendationSystem:
         return matches
 
 
-    def query(self, query, return_raw=True):
+    def query(self, query):
+        """
+        Generates a recommendation in a user friendly way
+
+        Parameters:
+          query (str): User query as in a chat
+
+        Returns:
+          matches (pd.DataFrame), response (str), parsed_response (json or NoneType):
+            `matches` is documented at `self.get_matches`
+            `response` is the raw response from the LLM
+            `parsed_response` is a JSON object with the fields `article_number`, `article_title`, `recommendation`. `article_number` is the position in the `matches` dataframe (starting from 1).
+        """
 
         # Search articles on the shop
         matches = self.get_matches(query)
