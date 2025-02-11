@@ -1,4 +1,4 @@
-from recommender import RecommendationSystem
+from recommender import RecommendationSystem, base_prompt_template
 from searchengine import AmazonSearchEngine
 from langchain_ollama.llms import OllamaLLM
 from tqdm.auto import tqdm
@@ -48,6 +48,14 @@ def main(args):
             "response": response,
             "parsed_response": parsed_response
         })
+
+    res = {
+        'prompt_template': base_prompt_template(),
+        'llm_model_name': llm_name,
+        'embedding_model_name': search_engine.embedding_model_name,
+        'temperature': f'{recommender_llm.temperature:.5f}',
+        'results': res
+    }
 
     # Store results
     with open(output_path, 'w') as f:
