@@ -15,7 +15,7 @@ class AmazonSearchEngine:
         """
 
         # Load Amazon product descriptions
-        self.amazon_data = pd.read_csv(self.metadata['data_path'])
+        self.amazon_data = pd.read_csv(self.metadata['data_path'], engine="pyarrow")
 
         # Preprocess data
         self.amazon_data = self.amazon_data.dropna(subset=['DESCRIPTION', 'PRODUCT_TYPE_ID'])

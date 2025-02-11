@@ -1,0 +1,66 @@
+from langchain_core.prompts import ChatPromptTemplate
+
+def build_prompt_template(titles, descriptions, query, attack_pos=None, ollama_prompt=False):
+
+    prompt = 'You are a shop assistant that recommends the user the given shop articles based on his/her preferences.\n\n'
+    prompt += 'Here are some articles in my shop:\n\n'
+    for i, (title, description) in enumerate(zip(titles, descriptions)):
+        if attack_pos is not None and attack_pos == i:
+            prompt += f'Title {i+1}: {{title}}\n'
+            prompt += f'Description {i+1}: {{description}}\n\n'
+        else:
+            prompt += f'Title {i+1}: {title}\n'
+            prompt += f'Description {i+1}: {description}\n\n'
+
+    query_line = '\nThe user query is "{query}". Based on the user query and the provided articles, recommend one of these articles in a chat way.'
+    if attack_pos is None:
+        query_line = query_line.format(query=query)
+    prompt += query_line
+    prompt += '\n\nPlease provide your answer using a JSON format with the fields "article_number", "article_title" and "recommendation"'
+
+    if ollama_prompt:
+        prompt = ChatPromptTemplate.from_template(prompt)
+
+    return prompt
+
+
+class RecommendationSystem:
+
+    def __init__(self, search_engine, llm, top_k=5):
+
+        self.llm = llm
+        self.search_engine = search_engine
+        self.queries_cache = dict()
+        self.top_k = top_k
+
+    def get_matches(self, query):
+
+        if query in self.queries_cache:
+            matches = self.queries_cache[query]
+        else:
+            matches = self.search_engine.query(query, self.top_k)
+            self.queries_cache[query] = matches
+        
+        return matches
+
+
+    def query(self, query, return_raw=True):
+
+        # Search articles on the shop
+        matches = self.get_matches(query)
+        titles = matches['TITLE'].tolist()
+        descriptions = matches['DESCRIPTION'].tolist()
+
+        # Use them as context
+        prompt = build_prompt_template(titles, descriptions, query, ollama_prompt=True)
+        chain = prompt | self.llm
+
+        # Generate response
+        response = chain.invoke({'query' : query})
+
+        return matches, response
+
+
+    def update_product_description(self, product_id, new_description):
+
+        raise NotImplementedError('TODO')
