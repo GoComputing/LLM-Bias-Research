@@ -1,13 +1,14 @@
 from langchain_core.prompts import ChatPromptTemplate
 from tools import extract_all_json
+import random
 
 def base_prompt_template():
 
     prompt = 'You are a shop assistant that recommends the user the given shop articles based on his/her preferences.\n\n'
     prompt += 'Here are some articles in my shop:\n\n'
     prompt += '{icl}'
-    prompt += '\nThe user query is "{query}". Based on the user query and the provided articles, recommend one of these articles in a chat way. These articles are not sorted by preference, so pick the one that better matches the user\'s preference'
-    prompt += '\n\nPlease provide your answer using a JSON format with the fields "article_number" (int), "article_title" (str) and "recommendation" (str)'
+    prompt += '\nThe user query is "{query}". Based on the user query and the provided articles, recommend one of these articles in a chat way. Think step by step why you choose your selected article.'
+    prompt += '\n\nAt the end, please provide your answer using a JSON format with the fields "article_number" (int), "article_title" (str) and "recommendation" (str). Provide a single JSON as described.'
 
     return prompt
 
@@ -28,6 +29,8 @@ def build_prompt_template(titles, descriptions, query, attack_pos=None, ollama_p
     prompt = base_prompt_template().format(icl=icl_prompt, query=query)
 
     if ollama_prompt:
+        prompt = prompt.replace('{', '{{')
+        prompt = prompt.replace('}', '}}')
         prompt = ChatPromptTemplate.from_template(prompt)
 
     return prompt
@@ -35,12 +38,14 @@ def build_prompt_template(titles, descriptions, query, attack_pos=None, ollama_p
 
 class RecommendationSystem:
 
-    def __init__(self, search_engine, llm, top_k=5):
+    def __init__(self, search_engine, llm, top_k=5, shuffle=True, initial_seed=None):
 
         self.llm = llm
         self.search_engine = search_engine
         self.queries_cache = dict()
         self.top_k = top_k
+        self.shuffle = shuffle
+        self.seed = initial_seed
 
     def get_matches(self, query):
         """
@@ -58,6 +63,12 @@ class RecommendationSystem:
         else:
             matches = self.search_engine.query(query, self.top_k)
             self.queries_cache[query] = matches
+
+        # Shuffle
+        if self.shuffle:
+            matches = matches.sample(frac=1, random_state=self.seed)
+            random.seed(self.seed)
+            self.seed = random.randint(0, 2**32)
         
         return matches
 

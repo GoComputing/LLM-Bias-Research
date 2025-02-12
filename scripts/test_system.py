@@ -12,6 +12,7 @@ def main(args):
     queries_path = args.queries_path
     llm_name = args.model
     output_path = args.output_path
+    initial_seed = args.seed
 
     if os.path.exists(output_path):
         raise IOError('Output path already exists')
@@ -34,7 +35,7 @@ def main(args):
     # Initialize recommender system
     recommender_llm = OllamaLLM(model=llm_name)
     recommender_llm.temperature = 0
-    recommendation_system = RecommendationSystem(search_engine, recommender_llm, top_k=5)
+    recommendation_system = RecommendationSystem(search_engine, recommender_llm, top_k=5, shuffle=True, initial_seed=initial_seed)
 
     # Generate responses
     res = []
@@ -54,6 +55,7 @@ def main(args):
         'llm_model_name': llm_name,
         'embedding_model_name': search_engine.embedding_model_name,
         'temperature': f'{recommender_llm.temperature:.5f}',
+        'initial_seed': initial_seed, 
         'results': res
     }
 
@@ -68,6 +70,7 @@ if __name__ == '__main__':
     parser.add_argument('-q', '--queries-path', type=str, required=True, help='A path to a JSON-like file which holds a list of queries')
     parser.add_argument('-m', '--model', type=str, default='llama3.1', help='LLM model name. This name should be available in ollama')
     parser.add_argument('-o', '--output-path', type=str, required=True, help='A path to a non-existing JSON file where results will be stored')
+    parser.add_argument('-s', '--seed', type=int, default=63456, help='Seed used for deterministic output')
 
     args = parser.parse_args()
 
