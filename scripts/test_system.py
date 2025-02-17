@@ -34,6 +34,7 @@ def main(args):
     recommender_llm = OllamaLLM(model=llm_name)
     recommender_llm.temperature = 0
     recommender_llm.num_ctx = 131072
+    recommender_llm.num_predict = 2000
     recommendation_system = RecommendationSystem(search_engine, recommender_llm, top_k=5, shuffle=True, initial_seed=initial_seed)
 
     res = {
@@ -41,7 +42,8 @@ def main(args):
         'llm_model_name': llm_name,
         'embedding_model_name': search_engine.embedding_model_name,
         'temperature': f'{recommender_llm.temperature:.5f}',
-        'initial_seed': initial_seed
+        'initial_seed': initial_seed,
+        'max_tokens': recommender_llm.num_predict
     }
 
     # Return from checkpoint
@@ -63,11 +65,13 @@ def main(args):
         recommendation_system.seed = res['last_seed']
 
     # Generate responses
-    for query_pos, query in tqdm(enumerate(queries), position=0, total=len(queries)):
+    queries_iterator = tqdm(enumerate(queries), position=0, total=len(queries))
+    for query_pos, query in queries_iterator:
         res_query = []
 
         # Check if already generated
         if query_pos < len(res['results']):
+            queries_iterator.update()
             continue
         
         for i in tqdm(range(repeats), position=1):
