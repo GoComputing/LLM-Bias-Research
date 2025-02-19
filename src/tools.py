@@ -13,6 +13,7 @@ def parse_json(raw_data):
     """
 
     try:
+        # TODO: escape all quotes (") that are not followed by a comma (,), a right curly brace (}) or a colon (:)
         data = json.loads(raw_data)
     except json.decoder.JSONDecodeError as e:
         print(f'WARNING: could not parse list from answer ({raw_data})')
