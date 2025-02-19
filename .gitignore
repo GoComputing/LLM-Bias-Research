@@ -5,6 +5,7 @@ conda_env/
 *.bkp
 test.py
 *.pyc
+.ipynb_checkpoints
 
 # Data
 data/dataset
