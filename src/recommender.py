@@ -12,7 +12,7 @@ def base_prompt_template():
 
     return prompt
 
-def build_prompt_template(titles, descriptions, query, attack_pos=None, ollama_prompt=False):
+def build_prompt_template(titles, descriptions, query, attack_pos=None, ollama_prompt=False, prompt_template=None):
 
     icl_prompt = ''
     for i, (title, description) in enumerate(zip(titles, descriptions)):
@@ -26,7 +26,9 @@ def build_prompt_template(titles, descriptions, query, attack_pos=None, ollama_p
     if attack_pos is not None:
         query = '{query}'
 
-    prompt = base_prompt_template().format(icl=icl_prompt, query=query)
+    if prompt_template is None:
+        prompt_template = base_prompt_template()
+    prompt = prompt_template.format(icl=icl_prompt, query=query)
 
     if ollama_prompt:
         prompt = prompt.replace('{', '{{')
@@ -34,6 +36,35 @@ def build_prompt_template(titles, descriptions, query, attack_pos=None, ollama_p
         prompt = ChatPromptTemplate.from_template(prompt)
 
     return prompt
+
+
+def generate_recommendation(recommender_llm, titles, descriptions, query, prompt_template=None):
+
+    # Use products as context
+    prompt = build_prompt_template(titles, descriptions, query, ollama_prompt=True, prompt_template=prompt_template)
+    chain = prompt | recommender_llm
+
+    # Generate response
+    response = chain.invoke({'query' : query})
+
+    # Parse response
+    schema = {
+        "type": "object",
+        "properties": {
+            "article_number": {"type": ["string", "integer"]},
+            "article_title": {"type": "string"},
+            "recommendation": {"type": "string"}
+        },
+        "required": ["article_number", "article_title", "recommendation"]
+    }
+
+    parsed_response = extract_all_json(response, schema)
+    if len(parsed_response) == 0 or len(parsed_response) > 1:
+        parsed_response = None
+    else:
+        parsed_response = parsed_response[0]
+
+    return response, parsed_response
 
 
 class RecommendationSystem:
@@ -92,29 +123,8 @@ class RecommendationSystem:
         titles = matches['TITLE'].tolist()
         descriptions = matches['DESCRIPTION'].tolist()
 
-        # Use them as context
-        prompt = build_prompt_template(titles, descriptions, query, ollama_prompt=True)
-        chain = prompt | self.llm
-
-        # Generate response
-        response = chain.invoke({'query' : query})
-
-        # Parse response
-        schema = {
-            "type": "object",
-            "properties": {
-                "article_number": {"type": ["string", "integer"]},
-                "article_title": {"type": "string"},
-                "recommendation": {"type": "string"}
-            },
-            "required": ["article_number", "article_title", "recommendation"]
-        }
-
-        parsed_response = extract_all_json(response, schema)
-        if len(parsed_response) == 0 or len(parsed_response) > 1:
-            parsed_response = None
-        else:
-            parsed_response = parsed_response[0]
+        # Get recommendation
+        response, parsed_response = generate_recommendation(self.llm, titles, descriptions, query)
 
         return matches, response, parsed_response
 
