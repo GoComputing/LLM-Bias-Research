@@ -10,6 +10,7 @@ test.py
 # Data
 data/dataset
 data/amazon_index
+data/bias_dataset.json
 
 # Results
 results/
