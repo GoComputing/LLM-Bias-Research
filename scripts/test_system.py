@@ -35,7 +35,7 @@ def main(args):
     recommender_llm.temperature = 0
     recommender_llm.num_ctx = 131072
     recommender_llm.num_predict = 2000
-    recommendation_system = RecommendationSystem(search_engine, recommender_llm, top_k=20, shuffle=True, initial_seed=initial_seed)
+    recommendation_system = RecommendationSystem(search_engine, recommender_llm, top_k=5, shuffle=True, initial_seed=initial_seed)
 
     res = {
         'prompt_template': base_prompt_template(),
@@ -71,7 +71,6 @@ def main(args):
 
         # Check if already generated
         if query_pos < len(res['results']):
-            queries_iterator.update()
             continue
         
         for i in tqdm(range(repeats), position=1):
