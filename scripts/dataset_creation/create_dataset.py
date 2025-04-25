@@ -40,7 +40,7 @@ def main(args):
     search_engine = AmazonSearchEngine()
     search_engine.load_search_engine(search_engine_path)
 
-    # Initial dataset
+    # Dataset metadata
     dataset = {
         'prompt_template': base_prompt_template(),
         'seed': seed,

@@ -33,7 +33,7 @@ def main(args):
         'results': []
     }
 
-    for query_info in dataset['queries']:
+    for query_info in tqdm(dataset['queries']):
 
         response, parsed_response = generate_recommendation(
             recommender_llm = recommender_llm,
