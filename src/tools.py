@@ -16,7 +16,7 @@ def parse_json(raw_data):
         # TODO: escape all quotes (") that are not followed by a comma (,), a right curly brace (}) or a colon (:)
         data = json.loads(raw_data)
     except json.decoder.JSONDecodeError as e:
-        print(f'WARNING: could not parse list from answer ({raw_data})')
+        # print(f'WARNING: could not parse list from answer ({raw_data})')
         data = None
 
     return data
@@ -87,3 +87,60 @@ def extract_all_json(raw_data, schema=None):
         res = list(filter(lambda json_object: valid_schema(json_object, schema), res))
 
     return res
+
+
+def build_paraphraser_prompt_template():
+
+    prompt  = "Paraphrase the following text. Do not change the meaning of the original text. Provide your answer in a JSON format. Use the format `{{\"paraphrased\": \"your answer\"}}`\n"
+    prompt += "\n"
+    prompt += "{text}"
+
+    return prompt
+
+
+def build_enhancer_prompt_template():
+
+    prompt  = "This is the product description from an online tool. Enhance the description so the likely of being recommendated is increased. Do not change the meaning of the original text. Provide your answer in a JSON format. Use the format `{{\"paraphrased\": \"your answer\"}}`\n"
+    prompt += "\n"
+    prompt += "{text}"
+
+    return prompt
+
+
+def paraphrase_text(llm, text, return_raw_response=True, original_on_failure=True, prompt_template=None):
+
+    # Build prompt
+    if prompt_template is None:
+        prompt_template = build_paraphraser_prompt_template()
+    prompt = build_paraphraser_prompt_template()
+    prompt = ChatPromptTemplate.from_template(prompt)
+    chain = prompt | llm
+
+    # Generate response
+    response = chain.invoke({'text': text})
+
+    # Parse response
+    schema = {
+        "type": "object",
+        "properties": {
+            "paraphrased": {"type": "string"},
+        },
+        "required": ["paraphrased"]
+    }
+
+    parsed_response = extract_all_json(response, schema)
+    if len(parsed_response) == 0 or len(parsed_response) > 1:
+        parsed_response = None
+    else:
+        parsed_response = parsed_response[0]
+
+    if parsed_response is not None:
+        paraphrased = parsed_response['paraphrased']
+    elif original_on_failure:
+        paraphrased = text
+    else:
+        paraphrased = None
+
+    if return_raw_response:
+        return paraphrased, response
+    return paraphrased
