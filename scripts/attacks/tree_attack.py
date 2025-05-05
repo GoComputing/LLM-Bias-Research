@@ -64,15 +64,17 @@ def transform_dataset(dataset, llm, prompt_template):
     return dataset, transform_data
 
 
-def launch_tree_attack_rec(dataset, attacker_llm, target_llm, full_tree, current_branch, evaluations, max_evaluations, max_depth, num_childs, output_dir, progress_bar, parent_score, prompt_template):
+def launch_tree_attack_rec(dataset, attacker_llm, target_llm, current_node, branch, evaluations, max_evaluations, max_depth, num_childs, output_dir, progress_bar, parent_score, prompt_template):
 
     # Transform dataset
     final_prompt_template = prompt_template + " Provide your answer in a JSON format. Use the format `{{\"paraphrased\": \"your answer\"}}, where \"your_answer\" is a single string`\n\n{text}"
-    transformed_dataset, transform_data = transform_dataset(dataset, attacker_llm, prompt_template)
+    # transformed_dataset, transform_data = transform_dataset(dataset, attacker_llm, final_prompt_template)
+    transform_data = dict()
 
     # Node evaluation
     current_eval = len(evaluations)
-    metric_value, evaluation_data = evaluate_dataset(transformed_dataset, target_llm)
+    # metric_value, evaluation_data = evaluate_dataset(transformed_dataset, target_llm)
+    metric_value, evaluation_data = 0.0, dict()
     evaluations.append({'metric_value': metric_value, 'prompt_template': prompt_template, 'transform_data': transform_data, 'eval_data': evaluation_data})
     progress_bar.update(1)
 
@@ -87,15 +89,28 @@ def launch_tree_attack_rec(dataset, attacker_llm, target_llm, full_tree, current
     if current_eval >= max_evaluations or max_depth == 0 or metric_value < parent_score:
         num_skip_steps = ((num_childs ** (max_depth+1) - 1) // (num_childs-1)) - 1
         progress_bar.update(num_skip_steps)
-        current_branch[current_eval] = None
+        current_node[current_eval] = None
     else:
-        current_branch[current_eval] = dict()
+        current_node[current_eval] = dict()
+        
+        # Retrieve all ancestors prompts
+        ancestors_prompts = [evaluations[eval_id]['prompt_template'] for eval_id in branch]
+        ancestors_metrics = [evaluations[eval_id]['metric_value'] for eval_id in branch]
+        
         for i in range(num_childs):
-            # Transform prompt
-            # TODO: key idea is to take all prompts and scores (ancestors). Then, paraphrase the current prompt using this information
-            #       variable holding prompt is prompt_template
-            
-            launch_tree_attack_rec(dataset, attacker_llm, target_llm, full_tree, current_branch[current_eval], evaluations, max_evaluations, max_depth-1, num_childs, output_dir, progress_bar)
+
+            # TODO: Generate a new child using these ancestors and their scores
+            # Think ways of adding variance, like temperature
+            child_prompt_template = prompt_template + f" ({current_eval})"
+
+            # Launch recursive call
+            launch_tree_attack_rec(
+                dataset,
+                attacker_llm, target_llm,
+                current_node[current_eval], branch+[current_eval], evaluations,
+                max_evaluations, max_depth-1, num_childs, output_dir,
+                progress_bar,
+                metric_value, child_prompt_template)
 
 
 def launch_tree_attack(dataset, attacker_llm, target_llm, max_evaluations, max_depth, num_childs, output_dir):
@@ -118,19 +133,47 @@ def launch_tree_attack(dataset, attacker_llm, target_llm, max_evaluations, max_d
 
     full_tree = dict()
     launch_tree_attack_rec(
-        dataset, attacker_llm, target_llm,
-        full_tree, full_tree, evaluations,
+        dataset['data'], attacker_llm['model'], target_llm['model'],
+        full_tree, [], evaluations,
         max_evaluations, max_depth, num_childs, output_dir,
         progress_bar,
         parent_score=float('-inf'), prompt_template=prompt_template
     )
 
+    # Get best evaluation
+    best_score = float('-inf')
+    best_eval_id = None
+    for i in range(len(evaluations)):
+        eval_score = evaluations[i]['metric_value']
+        if eval_score >= best_score:
+            best_score = eval_score
+            best_eval_id = i
+
+    # Store tree
     tree_path = os.path.join(output_dir, 'tree.json')
     with open(tree_path, 'w') as f:
         json.dump(full_tree, f, indent=3)
 
-    # TODO: store results (best prompt, metadata, ...)
-    #       best prompt can be easily retrieved from 'evaluations' list, where there is a field with the score and the prompt
+    # Store results
+    results = {
+        'best_result': {
+            'eval_id': best_eval_id,
+            'metric_value': best_score,
+            'prompt_template': evaluations[best_eval_id]['prompt_template']
+        },
+        'metadata': {
+            'dataset_path': dataset['path'],
+            'attacker_llm': attacker_llm['name'],
+            'target_llm': target_llm['name'],
+            'max_evaluations': max_evaluations,
+            'max_depth': max_depth,
+            'num_childs': num_childs
+        }
+    }
+
+    results_path = os.path.join(output_dir, 'results.json')
+    with open(results_path, 'w') as f:
+        json.dump(results, f, indent=3)
 
 
 def main(args):
@@ -157,7 +200,6 @@ def main(args):
     dataset['dataset_path'] = dataset_path
     dataset['attacker_model'] = model_name
     dataset['target_model'] = model_name
-    dataset['eval_model'] = model_name
     dataset['queries'] = queries
 
     # Configure LLMs
@@ -169,7 +211,11 @@ def main(args):
     target_llm = attacker_llm
 
     # Launch attack
-    results = launch_tree_attack(dataset, attacker_llm, target_llm, max_evaluations, max_depth, num_childs, output_dir)
+    results = launch_tree_attack(
+        {'path': dataset_path, 'data': dataset},
+        {'name': dataset['attacker_model'], 'model': attacker_llm},
+        {'name': dataset['target_model'],'model': target_llm},
+        max_evaluations, max_depth, num_childs, output_dir)
 
     # Evaluate dataset
     # TODO
