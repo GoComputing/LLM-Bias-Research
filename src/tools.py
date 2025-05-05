@@ -1,5 +1,62 @@
+from langchain_core.prompts import ChatPromptTemplate
 from jsonschema import validate
 import json
+import re
+
+def get_next_nonspace(text, start_pos):
+    for i in range(start_pos, len(text)):
+        if not text[i].isspace():
+            return text[i], i
+    return None, -1
+
+
+def valid_quote_json(text, quote_pos):
+
+    next_char, next_pos = get_next_nonspace(text, quote_pos+1)
+    valid = True
+
+    if next_char is not None:
+        next_next_char, next_next_pos = get_next_nonspace(text, next_pos+1)
+
+        valid = False
+        if next_next_char is None:
+            valid = next_char in ['}', ']']
+        elif next_char in ['}', ']'] and next_next_char in [',', '}', ']']:
+            valid = True
+        elif next_char == ':' and (next_next_char in ['"', '{', '[', ':'] or next_next_char.isdigit()):
+            valid = True
+        elif next_char == ',' and next_next_char in ['"']:
+            valid = True
+
+    return valid
+
+
+def fix_json(raw_data):
+
+    inside_string = False
+    escaped_chars_map = {'\n': '\\n'}
+    res = ""
+    prev_char = None
+
+    for i in range(len(raw_data)):
+
+        next_str = raw_data[i]
+
+        if raw_data[i] == '"':
+            if not inside_string:
+                inside_string = True
+            elif valid_quote_json(raw_data, i):
+                inside_string = False
+            elif prev_char != '\\': # If not already escaped
+                next_str = '\\"'
+        elif inside_string and raw_data[i] in escaped_chars_map:
+            next_str = escaped_chars_map[raw_data[i]]
+
+        res = res + next_str
+        prev_char = raw_data[i]
+
+    return res
+
 
 def parse_json(raw_data):
     """
@@ -12,9 +69,10 @@ def parse_json(raw_data):
       data (json or NoneType): JSON object if a valid JSON is encoded into the string. Otherwise None is returned
     """
 
+    fixed_raw_data = fix_json(raw_data)
+
     try:
-        # TODO: escape all quotes (") that are not followed by a comma (,), a right curly brace (}) or a colon (:)
-        data = json.loads(raw_data)
+        data = json.loads(fixed_raw_data)
     except json.decoder.JSONDecodeError as e:
         # print(f'WARNING: could not parse list from answer ({raw_data})')
         data = None
@@ -112,8 +170,7 @@ def paraphrase_text(llm, text, return_raw_response=True, original_on_failure=Tru
     # Build prompt
     if prompt_template is None:
         prompt_template = build_paraphraser_prompt_template()
-    prompt = build_paraphraser_prompt_template()
-    prompt = ChatPromptTemplate.from_template(prompt)
+    prompt = ChatPromptTemplate.from_template(prompt_template)
     chain = prompt | llm
 
     # Generate response
@@ -134,13 +191,15 @@ def paraphrase_text(llm, text, return_raw_response=True, original_on_failure=Tru
     else:
         parsed_response = parsed_response[0]
 
+    fail=True
     if parsed_response is not None:
         paraphrased = parsed_response['paraphrased']
+        fail=False
     elif original_on_failure:
         paraphrased = text
     else:
         paraphrased = None
 
     if return_raw_response:
-        return paraphrased, response
+        return paraphrased, {'original': text, 'response': response, 'parsed_response': parsed_response}
     return paraphrased

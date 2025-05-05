@@ -4,6 +4,7 @@ from langchain_core.prompts import ChatPromptTemplate
 from langchain_ollama.llms import OllamaLLM
 from sklearn.metrics import accuracy_score
 from tqdm.auto import tqdm
+from copy import deepcopy
 import argparse
 import json
 import os
@@ -26,10 +27,9 @@ def evaluate_dataset(dataset, target_llm):
         # Evaluate single sample
         response, parsed_response = generate_recommendation(target_llm, titles, descriptions, query, prompt_template=prompt_template)
 
-        print(parsed_response)
-
         evaluation_data.append({
             'predicted_pos': parsed_response['article_number'] if parsed_response is not None else -1,
+            'attack_pos': query_info['attack_pos'],
             'response': response,
             'parsed_response': parsed_response
         })
@@ -42,35 +42,59 @@ def evaluate_dataset(dataset, target_llm):
 
     return accuracy, evaluation_data
 
-    
+
+def transform_dataset(dataset, llm, prompt_template):
+
+    dataset = deepcopy(dataset)
+    transform_data = []
+
+    for query_info in tqdm(dataset['queries'], desc='Dataset transform', position=1):
+
+        # Retrieve description
+        attack_pos = query_info['attack_pos']
+        description = query_info['products'][attack_pos]['description']
+
+        # Transform description
+        new_description, paraphrase_data = paraphrase_text(llm, description, return_raw_response=True, original_on_failure=True, prompt_template=prompt_template)
+
+        # Set new description
+        query_info['products'][attack_pos]['description'] = new_description
+        transform_data.append(paraphrase_data)
+
+    return dataset, transform_data
 
 
 def launch_tree_attack_rec(dataset, attacker_llm, target_llm, full_tree, current_branch, evaluations, max_evaluations, max_depth, num_childs, output_dir, progress_bar, parent_score, prompt_template):
 
-    # TODO: Transform dataset
+    # Transform dataset
+    final_prompt_template = prompt_template + " Provide your answer in a JSON format. Use the format `{{\"paraphrased\": \"your answer\"}}, where \"your_answer\" is a single string`\n\n{text}"
+    transformed_dataset, transform_data = transform_dataset(dataset, attacker_llm, prompt_template)
 
     # Node evaluation
     current_eval = len(evaluations)
-    metric_value, evaluation_data = evaluate_dataset(dataset, target_llm)
-    evaluations.append({'metric_value': metric_value, 'prompt_template': prompt_template, 'data': evaluation_data})
+    metric_value, evaluation_data = evaluate_dataset(transformed_dataset, target_llm)
+    evaluations.append({'metric_value': metric_value, 'prompt_template': prompt_template, 'transform_data': transform_data, 'eval_data': evaluation_data})
     progress_bar.update(1)
 
-    evaluation_path = os.path.join(output_dir, 'evaluations', f'{current_eval:05}.json')
+    evaluations_dir = os.path.join(output_dir, 'evaluations')
+    evaluation_path = os.path.join(evaluations_dir, f'{current_eval:05}.json')
+    if not os.path.exists(evaluations_dir):
+        os.mkdir(evaluations_dir)
     with open(evaluation_path, 'w') as f:
-        json.dump(evaluations[-1])
+        json.dump(evaluations[-1], f, indent=3)
 
-    # Generate child nodes
+    # Stop this branch or generate child nodes
     if current_eval >= max_evaluations or max_depth == 0 or metric_value < parent_score:
         num_skip_steps = ((num_childs ** (max_depth+1) - 1) // (num_childs-1)) - 1
         progress_bar.update(num_skip_steps)
         current_branch[current_eval] = None
     else:
-        # Transform prompt
-        # TODO: key idea is to take all prompts and scores (ancestors). Then, paraphrase the current prompt using this information
-        #       variable holding prompt is prompt_template
-        
         current_branch[current_eval] = dict()
         for i in range(num_childs):
+            # Transform prompt
+            # TODO: key idea is to take all prompts and scores (ancestors). Then, paraphrase the current prompt using this information
+            #       variable holding prompt is prompt_template
+            
             launch_tree_attack_rec(dataset, attacker_llm, target_llm, full_tree, current_branch[current_eval], evaluations, max_evaluations, max_depth-1, num_childs, output_dir, progress_bar)
 
 
@@ -90,9 +114,7 @@ def launch_tree_attack(dataset, attacker_llm, target_llm, max_evaluations, max_d
     evaluations = []
 
     # Set an initial prompt template for paraphrasing a description
-    prompt_template  = "This is the product description from an online tool. Enhance the description so the likely of being recommendated is increased. Do not change the meaning of the original text. Provide your answer in a JSON format. Use the format `{{\"paraphrased\": \"your answer\"}}`\n"
-    prompt_template += "\n"
-    prompt_template += "{text}"
+    prompt_template  = "This is the product description from an online tool. Enhance the description so the likely of being recommendated is increased. Do not change the meaning of the original text."
 
     full_tree = dict()
     launch_tree_attack_rec(
@@ -100,7 +122,7 @@ def launch_tree_attack(dataset, attacker_llm, target_llm, max_evaluations, max_d
         full_tree, full_tree, evaluations,
         max_evaluations, max_depth, num_childs, output_dir,
         progress_bar,
-        parent_score=float('-inf'), dataset['prompt_template']
+        parent_score=float('-inf'), prompt_template=prompt_template
     )
 
     tree_path = os.path.join(output_dir, 'tree.json')
