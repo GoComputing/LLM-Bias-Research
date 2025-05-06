@@ -64,20 +64,74 @@ def transform_dataset(dataset, llm, prompt_template):
     return dataset, transform_data
 
 
-def launch_tree_attack_rec(dataset, attacker_llm, target_llm, current_node, branch, evaluations, max_evaluations, max_depth, num_childs, output_dir, progress_bar, parent_score, prompt_template):
+def get_mutate_prompt():
 
-    # Transform dataset
-    final_prompt_template = prompt_template + " Provide your answer in a JSON format. Use the format `{{\"paraphrased\": \"your answer\"}}, where \"your_answer\" is a single string`\n\n{text}"
-    # transformed_dataset, transform_data = transform_dataset(dataset, attacker_llm, final_prompt_template)
-    transform_data = dict()
+    prompt  = "Here are some examples of prompts that are used to paraphrase descriptions such that these descriptions are enhanced by another Large Language Model.\n\n"
+    prompt += "{icl}\n\n"
+    prompt += "I would like you to use these examples to create a new prompt to improve the efficacy of the prompt compared to these examples. Think step by step. Eventually, I would like you to generate a JSON holding your new prompt. Use the format {{\"prompt\": \"<your prompt>\"}}"
 
-    # Node evaluation
-    current_eval = len(evaluations)
-    # metric_value, evaluation_data = evaluate_dataset(transformed_dataset, target_llm)
-    metric_value, evaluation_data = 0.0, dict()
-    evaluations.append({'metric_value': metric_value, 'prompt_template': prompt_template, 'transform_data': transform_data, 'eval_data': evaluation_data})
+    return prompt
+
+
+def mutate_prompt(prompts_examples, prompts_metrics, attacker_llm, temperature):
+
+    # TODO: Think ways of adding variance, like temperature
+
+    # Build prompt (In-Context Learning)
+    icl = '\n\n'.join([f' * Prompt: {prompt}\n * Prompt score: {metric*100:.1f}' for prompt, metric in zip(prompts_examples, prompts_metrics)])
+    base_prompt = get_mutate_prompt()
+    prompt = ChatPromptTemplate.from_template(base_prompt)
+    chain = prompt | attacker_llm
+
+    # Generate response
+    old_temperature = attacker_llm.temperature
+    attacker_llm.temperature = temperature
+    response = chain.invoke({'icl': icl})
+    attacker_llm.temperature = old_temperature
+
+    # Parse response
+    schema = {
+        "type": "object",
+        "properties": {
+            "prompt": {"type": "string"},
+        },
+        "required": ["prompt"]
+    }
+
+    parsed_response = extract_all_json(response, schema)
+    if len(parsed_response) == 0 or len(parsed_response) > 1:
+        parsed_response = None
+    else:
+        parsed_response = parsed_response[0]
+
+    fail=True
+    if parsed_response is not None:
+        new_prompt = parsed_response['prompt']
+    else:
+        new_prompt = None
+
+    return new_prompt, response, parsed_response
+
+
+def launch_tree_attack_rec(dataset, attacker_llm, target_llm, current_node, branch, evaluations, max_evaluations, max_depth, num_childs, attacker_temperature, output_dir, progress_bar, parent_score, prompt_data):
+
+    if prompt_data['prompt'] is not None:
+        # Transform dataset
+        final_prompt_template = prompt_data['prompt'] + " Provide your answer in a JSON format. Use the format `{{\"paraphrased\": \"your answer\"}}, where \"your_answer\" is a single string`\n\n{text}"
+        transformed_dataset, transform_data = transform_dataset(dataset, attacker_llm, final_prompt_template)
+
+        # Node evaluation
+        current_eval = len(evaluations)
+        metric_value, evaluation_data = evaluate_dataset(transformed_dataset, target_llm)
+    else:
+        metric_value = None
+        evaluation_data = dict()
+        transform_data = dict()
+
+    evaluations.append({'metric_value': metric_value, 'prompt_data': prompt_data, 'transform_data': transform_data, 'eval_data': evaluation_data})
     progress_bar.update(1)
 
+    # Store evaluation
     evaluations_dir = os.path.join(output_dir, 'evaluations')
     evaluation_path = os.path.join(evaluations_dir, f'{current_eval:05}.json')
     if not os.path.exists(evaluations_dir):
@@ -94,26 +148,33 @@ def launch_tree_attack_rec(dataset, attacker_llm, target_llm, current_node, bran
         current_node[current_eval] = dict()
         
         # Retrieve all ancestors prompts
-        ancestors_prompts = [evaluations[eval_id]['prompt_template'] for eval_id in branch]
+        ancestors_prompts = [evaluations[eval_id]['prompt_data']['prompt'] for eval_id in branch]
         ancestors_metrics = [evaluations[eval_id]['metric_value'] for eval_id in branch]
-        
+
         for i in range(num_childs):
 
-            # TODO: Generate a new child using these ancestors and their scores
-            # Think ways of adding variance, like temperature
-            child_prompt_template = prompt_template + f" ({current_eval})"
+            # Generate a new child using these ancestors and their scores
+            child_prompt_template, response, parsed_response = mutate_prompt(
+                ancestors_prompts+[prompt_data['prompt']],
+                ancestors_metrics+[metric_value],
+                attacker_llm, attacker_temperature)
+            child_prompt_data = {
+                'prompt': child_prompt_template,
+                'response': response,
+                'parsed_response': parsed_response
+            }
 
             # Launch recursive call
             launch_tree_attack_rec(
                 dataset,
                 attacker_llm, target_llm,
                 current_node[current_eval], branch+[current_eval], evaluations,
-                max_evaluations, max_depth-1, num_childs, output_dir,
+                max_evaluations, max_depth-1, num_childs, attacker_temperature, output_dir,
                 progress_bar,
-                metric_value, child_prompt_template)
+                metric_value, child_prompt_data)
 
 
-def launch_tree_attack(dataset, attacker_llm, target_llm, max_evaluations, max_depth, num_childs, output_dir):
+def launch_tree_attack(dataset, attacker_llm, target_llm, max_evaluations, max_depth, num_childs, attacker_temperature, output_dir):
 
     # Adjust max_evaluations
     max_theoretical_evals = (num_childs ** (max_depth+1) - 1) // (num_childs-1)
@@ -129,15 +190,17 @@ def launch_tree_attack(dataset, attacker_llm, target_llm, max_evaluations, max_d
     evaluations = []
 
     # Set an initial prompt template for paraphrasing a description
-    prompt_template  = "This is the product description from an online tool. Enhance the description so the likely of being recommendated is increased. Do not change the meaning of the original text."
+    prompt_data  = {
+        'prompt': "This is the product description from an online tool. Enhance the description so the likely of being recommendated is increased. Do not change the meaning of the original text.",
+    }
 
     full_tree = dict()
     launch_tree_attack_rec(
         dataset['data'], attacker_llm['model'], target_llm['model'],
         full_tree, [], evaluations,
-        max_evaluations, max_depth, num_childs, output_dir,
+        max_evaluations, max_depth, num_childs, attacker_temperature, output_dir,
         progress_bar,
-        parent_score=float('-inf'), prompt_template=prompt_template
+        parent_score=float('-inf'), prompt_data=prompt_data
     )
 
     # Get best evaluation
@@ -159,7 +222,7 @@ def launch_tree_attack(dataset, attacker_llm, target_llm, max_evaluations, max_d
         'best_result': {
             'eval_id': best_eval_id,
             'metric_value': best_score,
-            'prompt_template': evaluations[best_eval_id]['prompt_template']
+            'prompt_template': evaluations[best_eval_id]['prompt_data']['prompt']
         },
         'metadata': {
             'dataset_path': dataset['path'],
@@ -167,7 +230,9 @@ def launch_tree_attack(dataset, attacker_llm, target_llm, max_evaluations, max_d
             'target_llm': target_llm['name'],
             'max_evaluations': max_evaluations,
             'max_depth': max_depth,
-            'num_childs': num_childs
+            'num_childs': num_childs,
+            'mutate_prompt': get_mutate_prompt(),
+            'attacker_temperature': attacker_temperature
         }
     }
 
@@ -184,6 +249,7 @@ def main(args):
     max_depth = args.max_depth
     max_evaluations = args.max_evals
     num_childs = args.num_childs
+    attacker_temperature = args.attacker_temperature
 
     if not os.path.exists(output_dir):
         raise IOError(f'Output directory does not exists ({output_dir})')
@@ -215,7 +281,7 @@ def main(args):
         {'path': dataset_path, 'data': dataset},
         {'name': dataset['attacker_model'], 'model': attacker_llm},
         {'name': dataset['target_model'],'model': target_llm},
-        max_evaluations, max_depth, num_childs, output_dir)
+        max_evaluations, max_depth, num_childs, attacker_temperature, output_dir)
 
     # Evaluate dataset
     # TODO
@@ -230,6 +296,7 @@ if __name__ == '__main__':
     parser.add_argument('--max-depth', default=4, type=int, help='Maximum tree depth to be explored')
     parser.add_argument('--max-evals', default=500, type=int, help='Maximum number of dataset evaluations')
     parser.add_argument('--num-childs', default=3, type=int, help='Number of childs for each node to be generated')
+    parser.add_argument('--attacker-temperature', default=2, type=float, help='Attacker temperature. Higher values would generate more variance')
 
     args = parser.parse_args()
 
