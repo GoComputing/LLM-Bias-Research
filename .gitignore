@@ -6,6 +6,7 @@ conda_env/
 test.py
 *.pyc
 .ipynb_checkpoints
+test_cases/
 
 # Data
 data/dataset

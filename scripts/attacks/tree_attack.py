@@ -99,7 +99,7 @@ def mutate_prompt(prompts_examples, prompts_metrics, attacker_llm, temperature):
     }
 
     parsed_response = extract_all_json(response, schema)
-    if len(parsed_response) == 0 or len(parsed_response) > 1:
+    if len(parsed_response) == 0:
         parsed_response = None
     else:
         parsed_response = parsed_response[0]
@@ -115,18 +115,19 @@ def mutate_prompt(prompts_examples, prompts_metrics, attacker_llm, temperature):
 
 def launch_tree_attack_rec(dataset, attacker_llm, target_llm, current_node, branch, evaluations, max_evaluations, max_depth, num_childs, attacker_temperature, output_dir, progress_bar, parent_score, prompt_data):
 
+    current_eval = len(evaluations)
+
     if prompt_data['prompt'] is not None:
         # Transform dataset
         final_prompt_template = prompt_data['prompt'] + " Provide your answer in a JSON format. Use the format `{{\"paraphrased\": \"your answer\"}}, where \"your_answer\" is a single string`\n\n{text}"
         transformed_dataset, transform_data = transform_dataset(dataset, attacker_llm, final_prompt_template)
 
         # Node evaluation
-        current_eval = len(evaluations)
         metric_value, evaluation_data = evaluate_dataset(transformed_dataset, target_llm)
     else:
-        metric_value = None
-        evaluation_data = dict()
-        transform_data = dict()
+        metric_value = float('-inf')
+        evaluation_data = []
+        transform_data = []
 
     evaluations.append({'metric_value': metric_value, 'prompt_data': prompt_data, 'transform_data': transform_data, 'eval_data': evaluation_data})
     progress_bar.update(1)

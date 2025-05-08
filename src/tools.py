@@ -14,19 +14,24 @@ def valid_quote_json(text, quote_pos):
 
     next_char, next_pos = get_next_nonspace(text, quote_pos+1)
     valid = True
+    next_string_found = False
 
-    if next_char is not None:
+    while next_char is not None and not next_string_found and valid:
+
         next_next_char, next_next_pos = get_next_nonspace(text, next_pos+1)
 
-        valid = False
-        if next_next_char is None:
-            valid = next_char in ['}', ']']
-        elif next_char in ['}', ']'] and next_next_char in [',', '}', ']']:
-            valid = True
-        elif next_char == ':' and (next_next_char in ['"', '{', '[', ':'] or next_next_char.isdigit()):
-            valid = True
-        elif next_char == ',' and next_next_char in ['"']:
-            valid = True
+        if next_char in ['}', ']']:
+            valid = next_next_char in [',', '}', ']'] or next_next_char is None
+        elif next_char == ':':
+            next_string_found = next_next_char.isdigit() or next_next_char == '"'
+            valid = next_next_char in ['{', '['] or next_string_found
+        elif next_char == ',':
+            next_string_found = next_next_char == '"'
+            valid = next_string_found
+        else:
+            valid = False
+
+        next_char, next_pos = next_next_char, next_next_pos
 
     return valid
 
@@ -34,26 +39,38 @@ def valid_quote_json(text, quote_pos):
 def fix_json(raw_data):
 
     inside_string = False
-    escaped_chars_map = {'\n': '\\n'}
+    escaped_chars_map = {'\n': '\\n', '\t': '\\t'}
     res = ""
     prev_char = None
 
-    for i in range(len(raw_data)):
+    i = 0
+    while i < len(raw_data):
 
         next_str = raw_data[i]
 
         if raw_data[i] == '"':
+            match_noquote_value = re.match('^[\s]*:[\s]*[^"\s\d]', raw_data[i+1:])
+
             if not inside_string:
                 inside_string = True
+            elif match_noquote_value is not None:
+                next_str = '": "'
+                inside_string = True
+                i += match_noquote_value.end() - 1
             elif valid_quote_json(raw_data, i):
                 inside_string = False
-            elif prev_char != '\\': # If not already escaped
+            elif prev_char != '\\':
                 next_str = '\\"'
+
+            # Sometimes llama escapes a end string quote, so unescape it
+            if not inside_string and prev_char == '\\':
+                res = res[:-1]
         elif inside_string and raw_data[i] in escaped_chars_map:
             next_str = escaped_chars_map[raw_data[i]]
 
         res = res + next_str
         prev_char = raw_data[i]
+        i += 1
 
     return res
 
@@ -186,7 +203,7 @@ def paraphrase_text(llm, text, return_raw_response=True, original_on_failure=Tru
     }
 
     parsed_response = extract_all_json(response, schema)
-    if len(parsed_response) == 0 or len(parsed_response) > 1:
+    if len(parsed_response) == 0:
         parsed_response = None
     else:
         parsed_response = parsed_response[0]
