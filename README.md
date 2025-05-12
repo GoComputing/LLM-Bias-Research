@@ -32,8 +32,10 @@ General steps
  5. Launch some of the implemented attacks
     5.1 Paraphraser attack
         $ python scripts/attacks/paraphraser.py -d data/eval_bias_dataset.json -o results/self_bias_analysis/<ATTACK>/queries.json -m <ATTACKER_MODEL>
+    5.2 Tree attack
+        $ python scripts/attacks/tree_attack.py -d data/train_bias_dataset.json -m <TARGET_MODEL> -o results/self_bias_analysis/tree_attack/ --max-depth MAX_DEPTH --num-childs NUM_CHILDS
  6. Generate evaluation
     6.1 Generate baseline results
         $ python scripts/evaluation/evaluate_bias.py -i data/eval_bias_dataset.json -m <TARGET_MODEL> -o results/self_bias_analysis/baseline__no_attack/evaluation.json
     6.2 Generate attack results
-        $ python scripts/evaluation/evaluate_bias.py -i results/self_bias_analysis/<ATTACK>/queries.json -m <TARGET_MODEL> -o results/self_bias_analysis/<ATTACK>/evaluation.json
+        $ python scripts/evaluation/evaluate_bias.py -i data/eval_bias_dataset.json -r results/self_bias_analysis/tree_attack__6_4/results.json -o results/self_bias_analysis/tree_attack__6_4/eval_results.json

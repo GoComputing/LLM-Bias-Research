@@ -1,5 +1,7 @@
 from langchain_core.prompts import ChatPromptTemplate
 from jsonschema import validate
+from tqdm.auto import tqdm
+from copy import deepcopy
 import json
 import re
 
@@ -220,3 +222,24 @@ def paraphrase_text(llm, text, return_raw_response=True, original_on_failure=Tru
     if return_raw_response:
         return paraphrased, {'original': text, 'response': response, 'parsed_response': parsed_response}
     return paraphrased
+
+
+def transform_dataset(dataset, llm, prompt_template, bar_pos=1):
+
+    dataset = deepcopy(dataset)
+    transform_data = []
+
+    for query_info in tqdm(dataset['queries'], desc='Dataset transform', position=bar_pos):
+
+        # Retrieve description
+        attack_pos = query_info['attack_pos']
+        description = query_info['products'][attack_pos]['description']
+
+        # Transform description
+        new_description, paraphrase_data = paraphrase_text(llm, description, return_raw_response=True, original_on_failure=True, prompt_template=prompt_template)
+
+        # Set new description
+        query_info['products'][attack_pos]['description'] = new_description
+        transform_data.append(paraphrase_data)
+
+    return dataset, transform_data
