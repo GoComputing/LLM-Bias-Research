@@ -1,5 +1,9 @@
+from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.prompts import ChatPromptTemplate
+from langchain_core.messages.ai import AIMessage
+from langchain_anthropic import ChatAnthropic
 from langchain_ollama.llms import OllamaLLM
+from langchain_openai import ChatOpenAI
 from jsonschema import validate
 from tqdm.auto import tqdm
 from copy import deepcopy
@@ -185,6 +189,17 @@ def build_enhancer_prompt_template():
     return prompt
 
 
+def langchain_invoke(chain, prompt_params):
+
+    response = chain.invoke(prompt_params)
+    if isinstance(response, AIMessage):
+        message = response.text()
+    else:
+        message = response
+
+    return message
+
+
 def paraphrase_text(llm, text, return_raw_response=True, original_on_failure=True, prompt_template=None):
 
     # Build prompt
@@ -194,7 +209,7 @@ def paraphrase_text(llm, text, return_raw_response=True, original_on_failure=Tru
     chain = prompt | llm
 
     # Generate response
-    response = chain.invoke({'text': text})
+    response = langchain_invoke(chain, {'text': text})
 
     # Parse response
     schema = {
@@ -221,7 +236,7 @@ def paraphrase_text(llm, text, return_raw_response=True, original_on_failure=Tru
         paraphrased = None
 
     if return_raw_response:
-        return paraphrased, {'original': text, 'response': response, 'parsed_response': parsed_response, 'seed': llm.seed}
+        return paraphrased, {'original': text, 'response': response, 'parsed_response': parsed_response, 'seed': llm.seed if hasattr(llm, 'seed') else 'Unsupported'}
     return paraphrased
 
 
@@ -248,9 +263,37 @@ def transform_dataset(dataset, llm, prompt_template, bar_pos=1):
 
 def load_llm(model_name):
 
-    llm = OllamaLLM(model=model_name)
-    llm.temperature = temperature
-    llm.num_ctx     = 16384
-    llm.num_predict = 4096
+    name_parts = model_name.split(':')
+    assert len(name_parts) == 2
+
+    base_name = name_parts[0]
+    version_name = name_parts[1]
+
+    if base_name == 'openai':
+        llm = ChatOpenAI(
+            model       = version_name,
+            temperature = 1, # OpenAI complains about temperature different from 1
+            max_tokens  = 4096,
+            max_retries = 5
+        )
+    elif base_name == 'anthropic':
+        llm = ChatAnthropic(
+            model       = version_name,
+            temperature = 0,
+            max_tokens  = 4096,
+            max_retries = 5,
+        )
+    elif base_name == 'google':
+        llm = ChatGoogleGenerativeAI(
+            model       = version_name,
+            temperature = 0,
+            max_tokens  = 16384,
+            max_retries = 5,
+        )
+    else:
+        llm = OllamaLLM(model=model_name)
+        llm.num_ctx     = 16384
+        llm.num_predict = 4096
+        llm.temperature = 0
 
     return llm
