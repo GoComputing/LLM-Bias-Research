@@ -1,4 +1,5 @@
 from langchain_core.prompts import ChatPromptTemplate
+from langchain_ollama.llms import OllamaLLM
 from jsonschema import validate
 from tqdm.auto import tqdm
 from copy import deepcopy
@@ -243,3 +244,13 @@ def transform_dataset(dataset, llm, prompt_template, bar_pos=1):
         transform_data.append(paraphrase_data)
 
     return dataset, transform_data
+
+
+def load_llm(model_name):
+
+    llm = OllamaLLM(model=model_name)
+    llm.temperature = temperature
+    llm.num_ctx     = 16384
+    llm.num_predict = 4096
+
+    return llm

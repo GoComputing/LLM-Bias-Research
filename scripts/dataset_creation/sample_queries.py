@@ -1,5 +1,4 @@
-from tools import paraphrase_text
-from langchain_ollama.llms import OllamaLLM
+from tools import paraphrase_text, load_llm
 from tqdm.auto import tqdm
 from copy import deepcopy
 import argparse
@@ -22,10 +21,8 @@ def main(args):
     with open(input_path, 'r') as f:
         dataset = json.load(f)
 
-    paraphraser_llm = OllamaLLM(model=model_name)
-    paraphraser_llm.temperature = temperature
-    paraphraser_llm.num_ctx     = 16384
-    paraphraser_llm.num_predict = 4096
+    # Load model
+    paraphraser_llm = load_llm(model_name)
 
     original_queries = dataset['queries']
     del dataset['queries']
