@@ -136,8 +136,8 @@ def launch_tree_attack_rec(dataset, attacker_llm, target_llm, current_node, bran
         for i in range(num_childs):
 
             random.seed(seed)
-            seed = random.randint(0, 2**32-1)
             attacker_llm.seed = seed # This seed is used in every model invoke (so two calls will produce the same behavior)
+            seed = random.randint(0, 2**32-1)
 
             # Generate a new child using these ancestors and their scores
             child_prompt_template, response, parsed_response = mutate_prompt(

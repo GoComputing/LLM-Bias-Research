@@ -24,6 +24,8 @@ def main(args):
         llm_name = attack_results['metadata']['target_llm']
         paraphrase_prompt_template = attack_results['best_result']['prompt_template'] + \
             " Provide your answer in a JSON format. Use the format `{{\"paraphrased\": \"your answer\"}}, where \"your_answer\" is a single string`\n\n{text}"
+    elif llm_name is None:
+        raise ValueError('If no results path is specified, model name must be provided')
 
     # Configure LLM recommender
     recommender_llm = OllamaLLM(model=llm_name)

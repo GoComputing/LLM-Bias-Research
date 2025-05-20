@@ -220,7 +220,7 @@ def paraphrase_text(llm, text, return_raw_response=True, original_on_failure=Tru
         paraphrased = None
 
     if return_raw_response:
-        return paraphrased, {'original': text, 'response': response, 'parsed_response': parsed_response}
+        return paraphrased, {'original': text, 'response': response, 'parsed_response': parsed_response, 'seed': llm.seed}
     return paraphrased
 
 
