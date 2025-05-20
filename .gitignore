@@ -12,6 +12,7 @@ test_cases/
 data/dataset
 data/amazon_index
 data/bias_dataset.json
+data/sampled_train_bias_dataset.json
 
 # Results
 results/
