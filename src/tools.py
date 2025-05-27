@@ -169,6 +169,7 @@ def extract_all_json(raw_data, schema=None, sort_by_length=True):
 
     if sort_by_length:
         res = sorted(zip(res, lengths), key=lambda elem: -elem[1])
+        res = [elem[0] for elem in res]
 
     if schema is not None:
         res = list(filter(lambda json_object: valid_schema(json_object, schema), res))
