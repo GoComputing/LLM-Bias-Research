@@ -123,7 +123,7 @@ def valid_schema(json_object, schema):
         return False
 
 
-def extract_all_json(raw_data, schema=None):
+def extract_all_json(raw_data, schema=None, sort_by_length=True):
     """
     Extract all valid JSONs in a string. There might be extra characters between JSON objects. If a schema is provided,
     JSON objects are filtered so that they follow the provided schema
@@ -137,6 +137,7 @@ def extract_all_json(raw_data, schema=None):
     """
 
     res = []
+    lengths = []
     start_pos = 0
     reading_json = False
     reading_list = False
@@ -164,6 +165,10 @@ def extract_all_json(raw_data, schema=None):
             json_data = parse_json(raw_data[start_pos:i+1])
             if json_data is not None:
                 res.append(json_data)
+                lengths.append(i - start_pos)
+
+    if sort_by_length:
+        res = sorted(zip(res, lengths), key=lambda elem: -elem[1])
 
     if schema is not None:
         res = list(filter(lambda json_object: valid_schema(json_object, schema), res))
