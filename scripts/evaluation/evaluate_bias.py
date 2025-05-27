@@ -1,12 +1,16 @@
 from recommender import generate_recommendation
-from tools import transform_dataset
+from tools import transform_dataset, load_llm
 from langchain_ollama.llms import OllamaLLM
+from dotenv import load_dotenv
 from tqdm.auto import tqdm
 import argparse
 import json
+import sys
 import os
 
 def main(args):
+
+    load_dotenv()
 
     input_dataset_path = args.input_dataset_path
     results_path = args.results_path
@@ -28,11 +32,7 @@ def main(args):
         raise ValueError('If no results path is specified, model name must be provided')
 
     # Configure LLM recommender
-    recommender_llm = OllamaLLM(model=llm_name)
-    recommender_llm.temperature = 0
-    # recommender_llm.num_ctx = 131072    # TODO: this is for Llama3.1. Parametrize to be able to use other models
-    recommender_llm.num_ctx     = 16384
-    recommender_llm.num_predict = 4096  # Limit the generation
+    recommender_llm = load_llm(llm_name)
 
     if results_path is not None:
         recommender_llm.seed = attack_results['metadata']['seed']
@@ -66,7 +66,7 @@ def main(args):
 
         results['results'].append({
             'query': query_info['query'],
-            'attack_pos': query_info['attack_pos'],
+            'attack_pos': query_info['attack_pos'] if 'attack_pos' in query_info else None,
             'predicted_pos': parsed_response['article_number'] if parsed_response is not None else None,
             'response': response,
             'parsed_response': parsed_response

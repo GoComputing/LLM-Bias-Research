@@ -66,7 +66,7 @@ def mutate_prompt(prompts_examples, prompts_metrics, attacker_llm, temperature):
     # Generate response
     old_temperature = attacker_llm.temperature
     attacker_llm.temperature = temperature
-    response = chain.invoke({'icl': icl})
+    response = langchain_invoke(chain, {'icl': icl})
     attacker_llm.temperature = old_temperature
 
     # Parse response

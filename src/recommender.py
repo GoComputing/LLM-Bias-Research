@@ -1,5 +1,5 @@
 from langchain_core.prompts import ChatPromptTemplate
-from tools import extract_all_json
+from tools import extract_all_json, langchain_invoke
 import random
 
 def base_prompt_template():
@@ -45,7 +45,7 @@ def generate_recommendation(recommender_llm, titles, descriptions, query, prompt
     chain = prompt | recommender_llm
 
     # Generate response
-    response = chain.invoke({'query' : query})
+    response = langchain_invoke(chain, {'query' : query})
 
     # Parse response
     schema = {
