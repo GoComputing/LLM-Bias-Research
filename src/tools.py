@@ -2,7 +2,7 @@ from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.messages.ai import AIMessage
 from langchain_anthropic import ChatAnthropic
-from langchain_ollama.llms import OllamaLLM
+from langchain_ollama import ChatOllama
 from langchain_openai import ChatOpenAI
 from jsonschema import validate
 from tqdm.auto import tqdm
@@ -291,7 +291,7 @@ def load_llm(model_name):
             max_retries = 5,
         )
     else:
-        llm = OllamaLLM(model=model_name)
+        llm = ChatOllama(model=model_name)
         llm.num_ctx     = 16384
         llm.num_predict = 4096
         llm.temperature = 0
