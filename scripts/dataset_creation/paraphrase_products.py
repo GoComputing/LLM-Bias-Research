@@ -47,6 +47,10 @@ def main(args):
     output_path = args.output_path
     seed = args.seed
     samples_per_query = args.samples_per_query
+    top_k = args.top_k
+
+    if top_k is None:
+        top_k = 1
 
     if not os.path.exists(output_path):
         os.makedirs(output_path)
@@ -67,9 +71,12 @@ def main(args):
 
         # Search products according to given queries
         for query in tqdm(input_queries, desc='Retrieve'):
-            top_product = search_engine.query(query, top_k=1).to_dict('records')[0]
-            top_product = {'id': top_product['PRODUCT_ID'], 'title': top_product['TITLE'], 'description': top_product['DESCRIPTION']}
-            search_results.append({'query': query, 'product': top_product})
+            top_products = search_engine.query(query, top_k=top_k).to_dict('records')
+            for i in range(len(top_products)):
+                top_products[i] = {'id': top_products[i]['PRODUCT_ID'], 'title': top_products[i]['TITLE'], 'description': top_products[i]['DESCRIPTION']}
+            if top_k == 1:
+                top_products = top_products[0]
+            search_results.append({'query': query, 'product' if top_k == 1 else 'products': top_products})
 
         # Store results
         with open(search_results_path, 'w') as f:
@@ -88,34 +95,45 @@ def main(args):
     for model_group, models_names in models.items():
         for model_name in models_names:
 
-            model_result_path = os.path.join(model_results_dir, model_name+'.json')
-            if os.path.exists(model_result_path):
-                models_progress_bar.update(1)
-                continue
-
             paraphraser_llm = load_llm(model_name)
             paraphrase_results = {
                 'metadata': {
                     'model_group': model_group,
-                    'model_name': model_name
+                    'model_name': model_name,
                 },
                 'results': []
             }
 
-            for query_info in tqdm(search_results, desc='Paraphrase', position=1):
-                new_description, paraphrase_data = paraphrase_text(
-                    paraphraser_llm,
-                    query_info['product']['description'],
-                    return_raw_response=True, original_on_failure=True)
+            model_result_path = os.path.join(model_results_dir, model_name+'.json')
+            if os.path.exists(model_result_path):
+                with open(model_result_path, 'r') as f:
+                    paraphrase_results = json.load(f)
+
+            # The for will recover if the script failed and launched again
+            for query_info in tqdm(search_results[len(paraphrase_results['results']):], desc='Paraphrase', position=1):
 
                 query_info = deepcopy(query_info)
-                query_info['product']['description'] = new_description
-                query_info['paraphrased_data'] = paraphrase_data
+                products = [query_info['product']] if 'product' in query_info else query_info['products']
+                paraphrased_data = []
+
+                for product in products:
+                    new_description, paraphrase_data = paraphrase_text(
+                        paraphraser_llm,
+                        product['description'],
+                        return_raw_response=True, original_on_failure=True)
+
+                    product['description'] = new_description
+                    paraphrased_data.append(paraphrase_data)
+
+                if len(paraphrased_data) == 1:
+                    paraphrased_data = paraphrased_data[0]
+
+                query_info['paraphrased_data'] = paraphrased_data
                 paraphrase_results['results'].append(query_info)
 
-            # Store model paraphrasing results
-            with open(model_result_path, 'w') as f:
-                json.dump(paraphrase_results, f, indent=3)
+                # Store model paraphrasing results
+                with open(model_result_path, 'w') as f:
+                    json.dump(paraphrase_results, f, indent=3)
 
             models_progress_bar.update(1)
 
@@ -127,8 +145,10 @@ def main(args):
             with open(paraphrased_path, 'r') as f:
                 model_results = json.load(f)
             for query_info in model_results['results']:
-                query_info['product']['model_group'] = model_group
-                query_info['product']['model_name'] = model_name
+                products = [query_info['product']] if 'product' in query_info else query_info['products']
+                for product in products:
+                    product['model_group'] = model_group
+                    product['model_name'] = model_name
             paraphrased_products.append(model_results['results'])
 
     # Generate final dataset
@@ -139,7 +159,8 @@ def main(args):
         'models': models,
         'seed': seed,
         'samples_per_query': samples_per_query,
-        'queries': []
+        'top_k': top_k,
+        'queries': [],
     }
 
     random.seed(seed)
@@ -148,9 +169,19 @@ def main(args):
         for i in range(samples_per_query):
             query_info = {
                 'query': products[0]['query'],
-                'products': [product['product'] for product in products]
             }
-            random.shuffle(query_info['products'])
+            products = list(products)
+            random.shuffle(products) # Shuffle "models" (each item is the paraphrased generated by one model)
+            if top_k == 1:
+                selected_products = [product['product'] for product in products]
+            else:
+                # products: list of size N, where N is the number of models
+                #           each element holds a list of products (products[*]['products'])
+                selected_products = []
+                products = products[:top_k]
+                for i in range(top_k):
+                    selected_products.append(products[i]['products'][i])
+            query_info['products'] = selected_products
             dataset['queries'].append(query_info)
 
     # Store dataset
@@ -166,6 +197,7 @@ if __name__ == '__main__':
     parser.add_argument('-o', '--output-path', required=True, type=str, help='Path to a directory where results will be stored')
     parser.add_argument('--seed', type=int, default=5243534, help='Seed used for deterministic output')
     parser.add_argument('-n', '--samples-per-query', type=int, default=10, help='Number of samples for each query. Each sample will randomly shuffle the products associated to the query')
+    parser.add_argument('-k', '--top-k', type=int, default=None, help='Number of products per query each model will paraphrase. If provided, the final dataset will chose a random model paraphrased product for each product position in the products list of each query')
 
     args = parser.parse_args()
 
