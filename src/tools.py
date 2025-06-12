@@ -270,7 +270,7 @@ def transform_dataset(dataset, llm, prompt_template, bar_pos=1):
     return dataset, transform_data
 
 
-def load_llm(model_name):
+def load_llm(model_name, **kwargs):
 
     name_parts = model_name.split(':')
     assert len(name_parts) == 2
@@ -283,7 +283,8 @@ def load_llm(model_name):
             model       = version_name,
             temperature = 1, # OpenAI complains about temperature different from 1
             max_tokens  = 4096,
-            max_retries = 5
+            max_retries = 5,
+            **kwargs
         )
     elif base_name == 'anthropic':
         llm = ChatAnthropic(
@@ -291,6 +292,7 @@ def load_llm(model_name):
             temperature = 0,
             max_tokens  = 4096,
             max_retries = 5,
+            **kwargs
         )
     elif base_name == 'google':
         llm = ChatGoogleGenerativeAI(
@@ -298,11 +300,12 @@ def load_llm(model_name):
             temperature = 0,
             max_tokens  = 16384,
             max_retries = 5,
+            **kwargs
         )
     elif base_name == 'nomodel':
         llm = None
     else:
-        llm = ChatOllama(model=model_name)
+        llm = ChatOllama(model=model_name, **kwargs)
         llm.num_ctx     = 16384
         llm.num_predict = 4096
         llm.temperature = 0
