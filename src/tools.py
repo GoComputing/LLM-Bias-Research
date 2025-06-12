@@ -208,6 +208,9 @@ def langchain_invoke(chain, prompt_params):
 
 def paraphrase_text(llm, text, return_raw_response=True, original_on_failure=True, prompt_template=None):
 
+    if llm is None:
+        return text, {}
+
     # Build prompt
     if prompt_template is None:
         prompt_template = build_paraphraser_prompt_template()
@@ -296,6 +299,8 @@ def load_llm(model_name):
             max_tokens  = 16384,
             max_retries = 5,
         )
+    elif base_name == 'nomodel':
+        llm = None
     else:
         llm = ChatOllama(model=model_name)
         llm.num_ctx     = 16384
