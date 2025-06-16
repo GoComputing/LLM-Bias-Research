@@ -86,6 +86,10 @@ def main(args):
     if os.path.exists(output_path):
         raise IOError(f'Output path already exists ({output_path})')
 
+    output_dir = os.path.dirname(output_path)
+    if not os.path.exists(output_dir):
+        os.makedirs(output_dir)
+
     # Configure LLM recommenders
     if hosts_path is None:
         hosts = [None]

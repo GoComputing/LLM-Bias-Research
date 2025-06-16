@@ -12,33 +12,33 @@ import os
 
 models = {
     # https://cloud.google.com/vertex-ai/generative-ai/docs/models
-    'google': [
+    # 'google': [
     #     'google:gemini-2.0-flash-lite',
-        'google:gemini-2.0-flash',
-    ],
+    #     'google:gemini-2.0-flash',
+    # ],
     # https://docs.anthropic.com/en/docs/about-claude/models/overview
-    'anthropic': [
+    # 'anthropic': [
     #     'anthropic:claude-3-7-sonnet-20250219',
-        'anthropic:claude-3-5-haiku-20241022'
-    ],
+    #     'anthropic:claude-3-5-haiku-20241022'
+    # ],
     # https://python.langchain.com/api_reference/_modules/langchain_community/callbacks/openai_info.html
-    'openai': [
-        'openai:o4-mini-2025-04-16',
+    # 'openai': [
+    #     'openai:o4-mini-2025-04-16',
     #     'openai:o3-mini-2025-01-31'
-    ],
+    # ],
     # https://ollama.com/library/llama3.1/tags
     'llama3.1': [
-        'llama3.1:8b-instruct-fp16',
-    #     'llama3.1:70b-instruct-q8_0'
+    #     'llama3.1:8b-instruct-fp16',
+        'llama3.1:70b-instruct-q8_0'
     ],
     # https://ollama.com/library/deepseek-r1/tags
     # 'deepseek': [
     #     'deepseek-r1:8b-llama-distill-fp16',
     #     'deepseek-r1:7b-qwen-distill-fp16',
     # ],
-    'nomodel': [
-        'nomodel:originaltext'
-    ]
+    # 'nomodel': [
+    #     'nomodel:originaltext'
+    # ]
 }
 
 def main(args):
@@ -188,7 +188,7 @@ def main(args):
                 selected_products = []
                 products = products[:top_k]
                 for i in range(top_k):
-                    selected_products.append(products[i]['products'][i])
+                    selected_products.append(products[i%len(products)]['products'][i])
             random.shuffle(selected_products)
             query_info['products'] = selected_products
             dataset['queries'].append(query_info)
