@@ -15,6 +15,7 @@ data/bias_dataset.json
 data/sampled_train_bias_dataset.json
 data/eval_models_dataset/
 data/eval_models_and_products_dataset/
+hosts*
 
 # Results
 results/
