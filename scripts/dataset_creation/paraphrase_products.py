@@ -2,6 +2,7 @@ from tools import load_llm, paraphrase_text
 from recommender import base_prompt_template
 
 from searchengine import AmazonSearchEngine
+from itertools import permutations
 from dotenv import load_dotenv
 from tqdm.auto import tqdm
 from copy import deepcopy
@@ -27,18 +28,18 @@ models = {
     #     'openai:o3-mini-2025-01-31'
     # ],
     # https://ollama.com/library/llama3.1/tags
-    'llama3.1': [
+    # 'llama3.1': [
     #     'llama3.1:8b-instruct-fp16',
-        'llama3.1:70b-instruct-q8_0'
-    ],
+    #     'llama3.1:70b-instruct-q8_0'
+    # ],
     # https://ollama.com/library/deepseek-r1/tags
     # 'deepseek': [
     #     'deepseek-r1:8b-llama-distill-fp16',
     #     'deepseek-r1:7b-qwen-distill-fp16',
     # ],
-    # 'nomodel': [
-    #     'nomodel:originaltext'
-    # ]
+    'nomodel': [
+        'nomodel:originaltext'
+    ]
 }
 
 def main(args):
@@ -52,6 +53,7 @@ def main(args):
     seed = args.seed
     samples_per_query = args.samples_per_query
     top_k = args.top_k
+    share_permutations = args.share_permutations
 
     dataset_path = os.path.join(output_path, f'{output_name}.json')
     if os.path.exists(dataset_path):
@@ -168,12 +170,39 @@ def main(args):
         'seed': seed,
         'samples_per_query': samples_per_query,
         'top_k': top_k,
+        'share_permutations': share_permutations,
         'queries': [],
     }
 
     random.seed(seed)
 
+    def sample_permutations(permutations_population, quantity):
+
+        if quantity is None:
+            permutations_list =  permutations_population
+        else:
+            indices = [random.randint(0, len(permutations_population)-1) for _ in range(quantity)]
+            permutations_list = [permutations_population[indices[i]] for i in range(quantity)]
+
+        return permutations_list
+
+    # Generate all possible permutations
+    permutations_population = list(permutations(range(top_k)))
+
+    # Special case: if samples per query is less than 1, use all possible permutations
+    permutations_quantity = samples_per_query
+    if samples_per_query < 1:
+        samples_per_query = len(permutations_population)
+        permutations_quantity = None
+
+    # Generate permutations shared across all queries
+    query_permutations = None
+    if share_permutations:
+        query_permutations = sample_permutations(permutations_population, permutations_quantity)
+
     for products in zip(*paraphrased_products):
+        if not share_permutations:
+            query_permutations = sample_permutations(permutations_population, permutations_quantity)
         for i in range(samples_per_query):
             query_info = {
                 'query': products[0]['query'],
@@ -189,7 +218,9 @@ def main(args):
                 products = products[:top_k]
                 for i in range(top_k):
                     selected_products.append(products[i%len(products)]['products'][i])
-            random.shuffle(selected_products)
+            # Uniformly select a permutation
+            permutation_sample = query_permutations[i]
+            selected_products = [selected_products[index] for index in permutation_sample]
             query_info['products'] = selected_products
             dataset['queries'].append(query_info)
 
@@ -207,6 +238,7 @@ if __name__ == '__main__':
     parser.add_argument('--seed', type=int, default=5243534, help='Seed used for deterministic output')
     parser.add_argument('-n', '--samples-per-query', type=int, default=10, help='Number of samples for each query. Each sample will randomly shuffle the products associated to the query')
     parser.add_argument('-k', '--top-k', type=int, default=None, help='Number of products per query each model will paraphrase. If provided, the final dataset will chose a random model paraphrased product for each product position in the products list of each query')
+    parser.add_argument('--share-permutations', action=argparse.BooleanOptionalAction, help='If enabled, share permutations across queries instead of sampling for each query')
 
     args = parser.parse_args()
 
