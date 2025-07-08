@@ -216,11 +216,12 @@ def main(args):
                 #           each element holds a list of products (products[*]['products'])
                 selected_products = []
                 products = products[:top_k]
-                for i in range(top_k):
-                    selected_products.append(products[i%len(products)]['products'][i])
+                for j in range(top_k):
+                    selected_products.append(products[j%len(products)]['products'][j])
             # Uniformly select a permutation
             permutation_sample = query_permutations[i]
             selected_products = [selected_products[index] for index in permutation_sample]
+            query_info['permutation'] = permutation_sample
             query_info['products'] = selected_products
             dataset['queries'].append(query_info)
 
