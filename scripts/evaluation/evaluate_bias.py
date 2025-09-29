@@ -9,7 +9,7 @@ import json
 import sys
 import os
 
-def process_dataset(dataset, llm_name, llm_host, results_queue, process_id, num_processes):
+def process_dataset(dataset, llm_name, llm_host, results, results_queue, process_id, num_processes):
 
     # Load recommender LLM
     recommender_llm = load_llm(llm_name, base_url=llm_host)
@@ -20,27 +20,30 @@ def process_dataset(dataset, llm_name, llm_host, results_queue, process_id, num_
     # Round-robin parallelization
     for sample_pos in range(process_id, len(dataset['queries']), num_processes):
 
-        query_info = dataset['queries'][sample_pos]
+        if results['results'][sample_pos] is not None:
+            sample_info = results['results'][sample_pos]
+        else:
+            query_info = dataset['queries'][sample_pos]
 
-        response, parsed_response = generate_recommendation(
-            recommender_llm = recommender_llm,
-            titles          = [product['title'] for product in query_info['products']],
-            descriptions    = [product['description'] for product in query_info['products']],
-            query           = query_info['query'],
-            prompt_template = prompt_template
-        )
+            response, parsed_response = generate_recommendation(
+                recommender_llm = recommender_llm,
+                titles          = [product['title'] for product in query_info['products']],
+                descriptions    = [product['description'] for product in query_info['products']],
+                query           = query_info['query'],
+                prompt_template = prompt_template
+            )
 
-        sample_info = {
-            'query': query_info['query'],
-            'attack_pos': query_info['attack_pos'] if 'attack_pos' in query_info else None,
-            'predicted_pos': parsed_response['article_number'] if parsed_response is not None else None,
-            'response': response,
-            'parsed_response': parsed_response
-        }
+            sample_info = {
+                'query': query_info['query'],
+                'attack_pos': query_info['attack_pos'] if 'attack_pos' in query_info else None,
+                'predicted_pos': parsed_response['article_number'] if parsed_response is not None else None,
+                'response': response,
+                'parsed_response': parsed_response
+            }
 
         results_queue.put((sample_info, sample_pos))
 
-def distribute_work(input_dataset_path, llm_name, hosts, output_path):
+def distribute_work(input_dataset_path, llm_name, hosts, output_path, store_freq=100):
 
     # Load evaluation dataset
     with open(input_dataset_path, 'r') as f:
@@ -49,15 +52,27 @@ def distribute_work(input_dataset_path, llm_name, hosts, output_path):
     # Prepare results structure
     results = {
         'input_dataset': input_dataset_path,
-        'recommender_llm': llm_name,
-        'results': [None] * len(dataset['queries'])
+        'recommender_llm': llm_name
     }
+
+    if os.path.exists(output_path):
+        # Load already generated results
+        with open(output_path, 'r') as f:
+            loaded_results = json.load(f)
+
+        # Integrity checks
+        for key in results.keys():
+            assert loaded_results[key] == results[key]
+
+        results['results'] = loaded_results['results']
+    else:
+        results['results'] = [None] * len(dataset['queries'])
 
     # Split dataset and launch processes
     results_queue = multiprocessing.Queue()
     processes = []
     for i, llm_host in enumerate(hosts):
-        process = multiprocessing.Process(target=process_dataset, args=(dataset, llm_name, llm_host, results_queue, i, len(hosts)))
+        process = multiprocessing.Process(target=process_dataset, args=(dataset, llm_name, llm_host, results, results_queue, i, len(hosts)))
         process.start()
         processes.append(process)
 
@@ -66,7 +81,11 @@ def distribute_work(input_dataset_path, llm_name, hosts, output_path):
         sample_info, sample_pos = results_queue.get()
         results['results'][sample_pos] = sample_info
 
-    # Store generated results
+        # Store generated results
+        if ((i+1) % store_freq) == 0:
+            with open(output_path, 'w') as f:
+                json.dump(results, f, indent=3)
+
     with open(output_path, 'w') as f:
         json.dump(results, f, indent=3)
 
@@ -78,13 +97,12 @@ def main(args):
 
     load_dotenv()
 
+    print("WARNING: Test the automatic checkpoin store")
+
     input_dataset_path = args.input_dataset_path
     llm_name = args.llm_name
     output_path = args.output_path
     hosts_path = args.hosts_path
-
-    if os.path.exists(output_path):
-        raise IOError(f'Output path already exists ({output_path})')
 
     output_dir = os.path.dirname(output_path)
     if not os.path.exists(output_dir):
