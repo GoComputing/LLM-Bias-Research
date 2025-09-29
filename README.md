@@ -29,4 +29,4 @@ General steps
  4. Sample paraphrased products
     $ python scripts/dataset_creation/paraphrase_products.py -i data/generated_queries.json -s data/amazon_index/ -o data/paraphrase_dataset --output-name model_bias_dataset -n 30 -k 5 --share-permutations
  5. Generate evaluation
-    $ python scripts/evaluation/evaluate_bias.py -i data/paraphrase_dataset/model_bias_dataset.json -m <TARGET_MODEL> -o results/evaluation_<MODEL_NAME>.json
+    $ python scripts/evaluation/evaluate_bias.py -i data/paraphrase_dataset/model_bias_dataset.json -m <TARGET_MODEL> -o results/main_results/evaluation_<MODEL_NAME>.json
